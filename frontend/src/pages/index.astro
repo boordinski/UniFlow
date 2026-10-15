@@ -1,0 +1,444 @@
+
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="UniFlow | Mobility Intelligence">
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="UniFlow, pagina iniziale">
+        <div class="brand-mark" aria-hidden="true">U</div>
+        <div>
+          <p class="brand-name">UniFlow</p>
+          <p class="brand-subtitle">University Mobility Intelligence</p>
+        </div>
+      </a>
+
+      <div class="environment-badge">
+        <span>●</span> Ambiente di sviluppo
+      </div>
+    </header>
+
+    <main>
+      <section class="page-heading">
+        <div>
+          <p class="eyebrow">Mobility intelligence</p>
+          <h1>Leggere il contesto.<br />Anticipare la mobilità.</h1>
+          <p class="intro">
+            Una prima vista operativa delle condizioni meteo previste per il
+            Polo di Povo, come base per comprendere e anticipare la pressione
+            sulla mobilità universitaria.
+          </p>
+        </div>
+
+        <form class="date-panel" id="weather-form">
+          <div class="field-group">
+            <label for="forecast-date">Data della previsione</label>
+            <input id="forecast-date" name="date" type="date" required />
+          </div>
+          <button class="primary-button" id="load-button" type="submit">
+            Aggiorna dati
+          </button>
+        </form>
+      </section>
+
+      <div
+        class="status-banner"
+        id="status-banner"
+        data-state="info"
+        role="status"
+        aria-live="polite"
+      >
+        Inizializzazione della dashboard meteo…
+      </div>
+
+      <section aria-labelledby="overview-heading">
+        <div class="section-heading">
+          <div>
+            <h2 id="overview-heading">Panoramica meteo</h2>
+            <p id="selected-date-label">In attesa dei dati</p>
+          </div>
+        </div>
+
+        <div class="metric-grid">
+          <article class="metric-card">
+            <div class="metric-label">Temperatura minima</div>
+            <div class="metric-value" id="min-temperature">—</div>
+            <div class="metric-detail">Minima prevista nella giornata</div>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-label">Temperatura massima</div>
+            <div class="metric-value" id="max-temperature">—</div>
+            <div class="metric-detail">Massima prevista nella giornata</div>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-label">Probabilità di precipitazioni</div>
+            <div class="metric-value" id="precipitation-probability">—</div>
+            <div class="metric-detail">Massimo previsto nella giornata</div>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-label">Precipitazioni totali</div>
+            <div class="metric-value" id="precipitation-total">—</div>
+            <div class="metric-detail">Accumulo previsto nella giornata</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="content-grid" aria-label="Dettaglio delle condizioni meteo">
+        <article class="panel">
+          <h3>Andamento orario</h3>
+          <p class="panel-description">
+            Evoluzione delle condizioni previste durante la giornata selezionata.
+          </p>
+
+          <div class="weather-hero">
+            <div>
+              <p class="weather-condition" id="weather-condition">—</p>
+              <p class="weather-temperature" id="current-temperature">—</p>
+            </div>
+            <div class="weather-icon" id="weather-icon" aria-hidden="true">☁</div>
+          </div>
+
+          <div class="hourly-list" id="hourly-list">
+            <div class="empty-state">Le fasce orarie appariranno qui.</div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <h3>Altri indicatori</h3>
+          <p class="panel-description">
+            Variabili ambientali che potranno contribuire all'analisi della
+            pressione sulla mobilità.
+          </p>
+
+          <div class="data-list">
+            <div class="data-row">
+              <span>Velocità massima del vento</span>
+              <strong id="wind-speed">—</strong>
+            </div>
+            <div class="data-row">
+              <span>Raffiche massime</span>
+              <strong id="wind-gusts">—</strong>
+            </div>
+            <div class="data-row">
+              <span>Temperatura percepita</span>
+              <strong id="apparent-temperature">—</strong>
+            </div>
+            <div class="data-row">
+              <span>Umidità relativa</span>
+              <strong id="humidity">—</strong>
+            </div>
+            <div class="data-row">
+              <span>Copertura nuvolosa</span>
+              <strong id="cloud-cover">—</strong>
+            </div>
+          </div>
+
+          <div class="source-note" id="source-note">
+            La fonte e la data della previsione saranno indicate dopo il caricamento.
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>UniFlow · Mobility Intelligence</span>
+      <span>Weather data · Prototipo</span>
+    </footer>
+  </div>
+
+  <script>
+    const form = document.querySelector<HTMLFormElement>("#weather-form")!;
+    const dateInput = document.querySelector<HTMLInputElement>("#forecast-date")!;
+    const loadButton = document.querySelector<HTMLButtonElement>("#load-button")!;
+    const statusBanner = document.querySelector<HTMLDivElement>("#status-banner")!;
+
+    const byId = <T extends HTMLElement>(id: string) =>
+      document.querySelector<T>(`#${id}`)!;
+
+    const conditionLabels: Record<string, string> = {
+      sunny: "Sereno",
+      partly_cloudy: "Parzialmente nuvoloso",
+      cloudy: "Nuvoloso",
+      rain: "Pioggia o precipitazioni",
+      snow: "Neve",
+      windy: "Ventoso",
+      unknown: "Condizioni non disponibili"
+    };
+
+    const conditionIcons: Record<string, string> = {
+      sunny: "☀",
+      partly_cloudy: "⛅",
+      cloudy: "☁",
+      rain: "🌧",
+      snow: "❄",
+      windy: "🌬",
+      unknown: "☁"
+    };
+
+    function formatDate(date: string): string {
+      const [year, month, day] = date.split("-");
+      return `${day}/${month}/${year}`;
+    }
+
+    function formatNumber(value: number | null | undefined, decimals = 0): string {
+      if (value == null || !Number.isFinite(value)) return "—";
+
+      return new Intl.NumberFormat("it-IT", {
+        maximumFractionDigits: decimals,
+        minimumFractionDigits: decimals
+      }).format(value);
+    }
+
+    function setStatus(
+      message: string,
+      state: "info" | "success" | "warning" | "error" = "info"
+    ) {
+      statusBanner.textContent = message;
+      statusBanner.dataset.state = state;
+    }
+
+    function resetDashboard() {
+      [
+        "min-temperature",
+        "max-temperature",
+        "precipitation-probability",
+        "precipitation-total",
+        "weather-condition",
+        "current-temperature",
+        "wind-speed",
+        "wind-gusts",
+        "apparent-temperature",
+        "humidity",
+        "cloud-cover"
+      ].forEach((id) => {
+        byId(id).textContent = "—";
+      });
+
+      byId("selected-date-label").textContent = "In attesa dei dati";
+      byId("weather-icon").textContent = "☁";
+      byId("hourly-list").replaceChildren();
+      byId("source-note").textContent = "In attesa della risposta del backend.";
+    }
+
+    function renderHourly(hourly: any[]) {
+      const list = byId("hourly-list");
+      list.replaceChildren();
+
+      // Mostriamo 6 punti rappresentativi distribuiti nella giornata,
+      // anziché comprimere tutte le 24 ore nella stessa riga.
+      const selectedHours = [6, 9, 12, 15, 18, 21];
+
+      for (const hourNumber of selectedHours) {
+        const hour = hourly.find((item) => {
+          const parsedHour = Number(item.time.slice(11, 13));
+          return parsedHour === hourNumber;
+        });
+
+        if (!hour) continue;
+
+        const card = document.createElement("div");
+        card.className = "hour-card";
+
+        const time = document.createElement("div");
+        time.className = "hour-time";
+        time.textContent = hour.time.slice(11, 16);
+
+        const temperature = document.createElement("div");
+        temperature.className = "hour-temperature";
+        temperature.textContent =
+          hour.temperatureC == null
+            ? "—"
+            : `${formatNumber(hour.temperatureC)}°`;
+
+        const rain = document.createElement("div");
+        rain.className = "hour-rain";
+        rain.textContent =
+          hour.precipitationProbability == null
+            ? "Pioggia —"
+            : `Pioggia ${formatNumber(hour.precipitationProbability)}%`;
+
+        card.append(time, temperature, rain);
+        list.append(card);
+      }
+
+      if (list.childElementCount === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty-state";
+        empty.textContent = "Nessun dato orario disponibile per questa data.";
+        list.append(empty);
+      }
+    }
+
+    function renderForecast(forecast: any, requestedDate: string) {
+      byId("selected-date-label").textContent = formatDate(requestedDate);
+
+      byId("min-temperature").textContent =
+        `${formatNumber(forecast.temperatureMinC)}°`;
+      byId("max-temperature").textContent =
+        `${formatNumber(forecast.temperatureMaxC)}°`;
+
+      byId("precipitation-probability").textContent =
+        forecast.precipitationProbability == null
+          ? "—"
+          : `${formatNumber(forecast.precipitationProbability)}%`;
+
+      byId("precipitation-total").textContent =
+        `${formatNumber(forecast.precipitationMm, 1)} mm`;
+
+      byId("wind-speed").textContent =
+        `${formatNumber(forecast.windSpeedMaxKmh)} km/h`;
+      byId("wind-gusts").textContent =
+        `${formatNumber(forecast.windGustsMaxKmh)} km/h`;
+
+      const hourly: any[] = Array.isArray(forecast.hourly)
+        ? forecast.hourly
+        : [];
+
+      const midday = hourly.find((hour) => hour.time.slice(11, 13) === "12")
+        ?? hourly[Math.floor(hourly.length / 2)];
+
+      byId("weather-condition").textContent =
+        conditionLabels[midday?.condition ?? forecast.condition] ?? "Non disponibile";
+
+      byId("weather-icon").textContent =
+        conditionIcons[midday?.condition ?? forecast.condition] ?? "☁";
+
+      byId("current-temperature").textContent =
+        midday?.temperatureC == null
+          ? "—"
+          : `${formatNumber(midday.temperatureC)}°`;
+
+      byId("apparent-temperature").textContent =
+        midday?.apparentTemperatureC == null
+          ? "—"
+          : `${formatNumber(midday.apparentTemperatureC)} °C`;
+
+      byId("humidity").textContent =
+        midday?.relativeHumidity == null
+          ? "—"
+          : `${formatNumber(midday.relativeHumidity)}%`;
+
+      byId("cloud-cover").textContent =
+        midday?.cloudCover == null
+          ? "—"
+          : `${formatNumber(midday.cloudCover)}%`;
+
+      renderHourly(hourly);
+
+      const sourceLabel =
+        forecast.source === "open-meteo"
+          ? "Open-Meteo"
+          : forecast.source === "simulated"
+            ? "Dati simulati"
+            : "Fonte non specificata";
+
+      byId("source-note").textContent =
+        `Fonte: ${sourceLabel}. Dati previsionali, non misurazioni in tempo reale. ` +
+        "L'attribuzione della fonte sarà completata nella documentazione del progetto.";
+    }
+
+    async function loadForecast(date: string) {
+      loadButton.disabled = true;
+      loadButton.textContent = "Caricamento…";
+      resetDashboard();
+      setStatus("Richiesta dei dati meteo al backend…");
+
+      try {
+        const response = await fetch(
+          `/api/weather?date=${encodeURIComponent(date)}`
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          const message =
+            typeof result.message === "string"
+              ? result.message
+              : typeof result.error === "string"
+                ? result.error
+                : "Il backend non è riuscito a recuperare i dati.";
+
+          setStatus(message, "error");
+          return;
+        }
+
+        switch (result.status) {
+          case "available":
+            if (!result.forecast) {
+              setStatus("Il backend ha risposto senza una previsione valida.", "error");
+              return;
+            }
+
+            renderForecast(result.forecast, date);
+            setStatus(
+              `Dati caricati per il ${formatDate(date)}. Fonte: ${
+                result.forecast.source === "open-meteo"
+                  ? "Open-Meteo"
+                  : result.forecast.source
+              }.`,
+              "success"
+            );
+            break;
+
+          case "beyond_reliable_horizon":
+            setStatus(
+              result.message ??
+                "La data selezionata supera l'orizzonte operativo delle previsioni.",
+              "warning"
+            );
+            break;
+
+          case "date_in_past":
+          case "invalid_date":
+          case "forecast_unavailable":
+            setStatus(
+              result.message ?? "Previsione non disponibile.",
+              "warning"
+            );
+            break;
+
+          default:
+            setStatus("Il backend ha restituito uno stato non riconosciuto.", "error");
+        }
+      } catch (error) {
+        console.error("Errore durante il caricamento meteo:", error);
+
+        setStatus(
+          "Impossibile raggiungere il backend. Verifica che Express sia attivo sulla porta 3000.",
+          "error"
+        );
+      } finally {
+        loadButton.disabled = false;
+        loadButton.textContent = "Aggiorna dati";
+      }
+    }
+
+    function getLocalDateISO(): string {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+
+      return `${year}-${month}-${day}`;
+    }
+
+    dateInput.value = getLocalDateISO();
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      if (!dateInput.value) {
+        setStatus("Seleziona una data prima di aggiornare i dati.", "warning");
+        return;
+      }
+
+      loadForecast(dateInput.value);
+    });
+
+    loadForecast(dateInput.value);
+  </script>
+</BaseLayout>
